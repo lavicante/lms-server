@@ -5,6 +5,8 @@ import { catchAsyncErrors } from "../middlewares/catchAsyncErrors";
 import jwt, { Secret } from "jsonwebtoken";
 import dotenv from "dotenv";
 import sendMail from "../utils/sendMail";
+import sendToken from "../utils/sendToken";
+import { redis } from "../utils/redis";
 dotenv.config();
 
 //register user
@@ -118,8 +120,6 @@ export const activateUser = catchAsyncErrors(
         process.env.SECRET_KEY as string
       ) as newUser;
 
-      console.log(newUser, "NEW USER");
-
       if (newUser.activationCode !== activation_code) {
         return next(new ErrorHandler("Invalid activation code", 400));
       }
@@ -144,6 +144,59 @@ export const activateUser = catchAsyncErrors(
       });
     } catch (err: any) {
       return next(new ErrorHandler(err.message, 400));
+    }
+  }
+);
+
+//login user
+
+export const loginUser = catchAsyncErrors(
+  async (req: CustomReques<IUser>, res: Response, next: NextFunction) => {
+    try {
+      const { email, password } = req.body;
+
+      if (!password || !email) {
+        return next(new ErrorHandler("Please enter email and password", 400));
+      }
+
+      const user = (await userModel
+        .findOne({ email })
+        .select("+password")) as IUser;
+
+      if (!user) {
+        next(new ErrorHandler("Invalid email or password", 400));
+      }
+
+      const isComparePassword = await user?.comparePassword(password);
+
+      if (!isComparePassword) {
+        return next(new ErrorHandler("Invalid email or password", 400));
+      }
+
+      sendToken(user, 200, res);
+    } catch (err: any) {
+      return next(new ErrorHandler(err.message, 400));
+    }
+  }
+);
+
+// logout user
+export const logout = catchAsyncErrors(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const userId = req.user?._id || "";
+      console.log(userId);
+      res.cookie("access_token", {}, { maxAge: 1 });
+      res.cookie("refresh_token", {}, { maxAge: 1 });
+
+      redis.del(userId);
+
+      res.status(200).json({
+        success: true,
+        message: "User logged out successfully",
+      });
+    } catch (err: any) {
+      next(new ErrorHandler(err.message, 400));
     }
   }
 );
