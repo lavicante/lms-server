@@ -6,6 +6,7 @@ import jwt, { Secret } from "jsonwebtoken";
 import dotenv from "dotenv";
 import sendMail from "../utils/sendMail";
 import sendToken from "../utils/sendToken";
+import { redis } from "../utils/redis";
 dotenv.config();
 
 //register user
@@ -183,8 +184,12 @@ export const loginUser = catchAsyncErrors(
 export const logout = catchAsyncErrors(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const userId = req.user?._id || "";
+      console.log(userId);
       res.cookie("access_token", {}, { maxAge: 1 });
       res.cookie("refresh_token", {}, { maxAge: 1 });
+
+      redis.del(userId);
 
       res.status(200).json({
         success: true,
